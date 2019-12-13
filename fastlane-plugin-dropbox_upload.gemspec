@@ -11,7 +11,7 @@ Gem::Specification.new do |spec|
   spec.email         = 'Jason.Wang2@harman.com'
 
   spec.summary       = 'upload files to dropbox'
-  # spec.homepage      = "https://github.com/<GITHUB_USERNAME>/fastlane-plugin-dropbox_upload"
+  spec.homepage      = "https://github.com/517tianhe/fastlane-plugin-dropbox_upload"
   spec.license       = "MIT"
 
   spec.files         = Dir["lib/**/*"] + %w(README.md LICENSE)
