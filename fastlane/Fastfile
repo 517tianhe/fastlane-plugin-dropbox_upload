@@ -1,3 +1,13 @@
 lane :test do
-  dropbox_upload
+  upload_dropbox
+end
+
+lane :upload_dropbox do |options|
+    dropbox_path = options[:dropbox_path] || "/fastlane"
+    dropbox_upload(
+    file_path: 'README.md',
+    dropbox_path: dropbox_path,
+    write_mode: 'overwrite',
+    access_token: 'wzVJmnwtx2AAAAAAAAAAGzUorkSJZNFtaY86qpF02nbA1SkfdmsoBdNed0i0mz43'
+    )
 end

@@ -36,11 +36,19 @@ module Fastlane
         end
 
         client = DropboxApi::Client.new(access_token)
+        fileSize = File.size(file_path)
+        more_space = is_space_enough(client, fileSize)
+        if more_space >= 0
+            UI.message 'space is enough'
+        else
+            UI.message "space almost fill need more #{-more_space}, delete the earliest file"
+            delete_earliest_file(client, -more_space)
+        end
 
         output_file = nil
         chunk_size = 157_286_400 # 150M
         destination_path = destination_path(dropbox_path, file_path)
-        if File.size(file_path) < chunk_size
+        if fileSize < chunk_size
             output_file = upload(client, file_path, destination_path, write_mode)
         else
             output_file = upload_chunked(client, chunk_size, file_path, destination_path, write_mode)
@@ -104,6 +112,85 @@ module Fastlane
           end
         end
         parts
+      end
+
+      def self.is_space_enough(client, fileSize)
+        spaceUsage = client.get_space_usage
+        used = spaceUsage.used.to_i
+        allocated = spaceUsage.allocation.allocated
+        unuse = allocated - used
+        UI.important "Space allocated: #{allocated} used: #{used}  unuse: #{unuse} "
+        if fileSize > allocated
+            UI.user_error! 'Upload file size over allocated space'
+        end
+        return unuse - fileSize
+      end
+
+      def self.delete_earliest_file(client, more_space)
+        UI.message ''
+        UI.important "Need space #{more_space}"
+        UI.message ''
+        delete_space = 0
+        files = get_all_files(client)
+        files.each { |file|
+            delete_space = delete_space + delete_file(client, file)
+            if delete_space > more_space
+                break
+            end
+          }
+        UI.important "Delete space #{delete_space}"
+      end
+
+      def self.delete_file(client, file)
+        path_display = file.path_display
+        delete_result = client.delete path_display
+        UI.message  "Delete file:#{file.path_display} size:#{file.size}"
+        return delete_result.size
+      end
+
+      def self.get_all_files(client)
+        files = list_folder(client)
+        files.sort_by { |a|
+            a.client_modified
+        }
+        return files
+      end
+
+      def self.list_folder(client, path = '')
+        UI.important "List files in path #{path} "
+        options = {}
+        options[:recursive] = true
+        options[:include_media_info] = false
+        options[:include_deleted] = false
+        folderResult = client.list_folder path, options
+        files = get_tagfile(folderResult)
+        if folderResult.has_more?
+            more_files = list_folder_continue(client, folderResult.cursor)
+            files.concat(more_files)
+        end
+        return files
+      end
+
+      def self.list_folder_continue(client, cursor)
+        folderResult = client.list_folder_continue cursor
+        files = get_tagfile(folderResult)
+        if folderResult.has_more?
+            more_files = list_folder_continue(client, folderResult.cursor)
+            files.concat(more_files)
+        end
+        return files
+      end
+
+      def self.get_tagfile(result)
+        files = []
+        entries = result.entries
+        entries[1..entries.size].each do |obj|
+            if obj.class == DropboxApi::Metadata::File
+                files.push(obj)
+                UI.message  "File:#{obj.path_display} size:#{obj.size}"
+            end
+        end
+        return files
       end
 
       def self.description
