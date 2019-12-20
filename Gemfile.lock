@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    fastlane-plugin-dropbox_upload (0.2.1)
+    fastlane-plugin-dropbox_upload (0.2.2)
       dropbox_api
 
 GEM
