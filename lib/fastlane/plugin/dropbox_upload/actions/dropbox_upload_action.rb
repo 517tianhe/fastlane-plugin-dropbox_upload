@@ -12,6 +12,7 @@ module Fastlane
         access_token = params[:access_token]
         file_path = params[:file_path]
         dropbox_path = params[:dropbox_path]
+        enable_clear = params[:enable_clear]
 
         UI.message ''
         UI.message("The dropbox_upload plugin is working!")
@@ -20,6 +21,9 @@ module Fastlane
 
         if write_mode.nil?
             write_mode = 'add'
+        end
+        if enable_clear.nil?
+            enable_clear = false
         end
         if write_mode.eql? 'update'
             if update_rev.nil?
@@ -37,12 +41,14 @@ module Fastlane
 
         client = DropboxApi::Client.new(access_token)
         fileSize = File.size(file_path)
-        more_space = is_space_enough(client, fileSize)
-        if more_space >= 0
+        remain_space = is_space_enough(client, fileSize)
+        if remain_space >= 0
             UI.message 'space is enough'
+        elsif enable_clear
+            UI.message "space almost fill need more #{-remain_space}, delete the earliest file"
+            delete_earliest_file(client, -remain_space)
         else
-            UI.message "space almost fill need more #{-more_space}, delete the earliest file"
-            delete_earliest_file(client, -more_space)
+            UI.user_error! "Can't to upload file to Dropbox, space is full!"
         end
 
         output_file = nil
@@ -126,15 +132,15 @@ module Fastlane
         return unuse - fileSize
       end
 
-      def self.delete_earliest_file(client, more_space)
+      def self.delete_earliest_file(client, space)
         UI.message ''
-        UI.important "Need space #{more_space}"
+        UI.important "Need space #{space}"
         UI.message ''
         delete_space = 0
         files = get_all_files(client)
         files.each { |file|
             delete_space = delete_space + delete_file(client, file)
-            if delete_space > more_space
+            if delete_space > space
                 break
             end
           }
@@ -153,7 +159,7 @@ module Fastlane
         files.sort_by { |a|
             a.client_modified
         }
-        return files
+        return files.reverse
       end
 
       def self.list_folder(client, path = '')
@@ -212,7 +218,7 @@ module Fastlane
 
       def self.available_options
         [
-          FastlaneCore::ConfigItem.new(key: :file_path,
+            FastlaneCore::ConfigItem.new(key: :file_path,
                                        env_name: 'DROPBOX_FILE_PATH',
                                        description: 'Path to the uploaded file',
                                        type: String,
@@ -221,12 +227,12 @@ module Fastlane
                                          UI.user_error!("No file path specified for upload to Dropbox, pass using `file_path: 'path_to_file'`") unless value && !value.empty?
                                          UI.user_error!("Couldn't find file at path '#{value}'") unless File.exist?(value)
                                        end),
-          FastlaneCore::ConfigItem.new(key: :dropbox_path,
+            FastlaneCore::ConfigItem.new(key: :dropbox_path,
                                        env_name: 'DROPBOX_PATH',
                                        description: 'Path to the destination Dropbox folder',
                                        type: String,
                                        optional: true),
-          FastlaneCore::ConfigItem.new(key: :write_mode,
+            FastlaneCore::ConfigItem.new(key: :write_mode,
                                        env_name: 'DROPBOX_WRITE_MODE',
                                        description: 'Determines uploaded file write mode. Supports `add`, `overwrite` and `update`',
                                        type: String,
@@ -249,7 +255,13 @@ module Fastlane
                                        optional: false,
                                        verify_block: proc do |value|
                                          UI.user_error!("access_token not specified for Dropbox app. Provide your app's access_token or create a new ") unless value && !value.empty?
-                                       end)
+                                       end),
+        FastlaneCore::ConfigItem.new(key: :enable_clear,
+                                     env_name: 'ENABLE_CLEAR',
+                                     description: 'enable delete file when space is full',
+                                     type: Boolean,
+                                     optional: true,
+                                     )
         ]
       end
 
