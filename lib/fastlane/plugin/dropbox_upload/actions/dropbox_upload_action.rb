@@ -159,7 +159,7 @@ module Fastlane
         files.sort_by { |a|
             a.client_modified
         }
-        return files.reverse
+        return files
       end
 
       def self.list_folder(client, path = '')
